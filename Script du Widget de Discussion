@@ -1,0 +1,641 @@
+// Script du Widget de Discussion
+(function() {
+    // ----------------------------------------------------------------------
+    // 1. DÉFINITION ET INJECTION DES STYLES CSS
+    // ----------------------------------------------------------------------
+    const styles = `
+        .n8n-widget-discussion {
+            /* Variables CSS en français */
+            --discussion--couleur-primaire: var(--n8n-discussion-couleur-primaire, #854fff);
+            --discussion--couleur-secondaire: var(--n8n-discussion-couleur-secondaire, #6b3fd4);
+            --discussion--couleur-fond: var(--n8n-discussion-couleur-fond, #ffffff);
+            --discussion--couleur-police: var(--n8n-discussion-couleur-police, #333333);
+            font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        .n8n-widget-discussion .conteneur-discussion {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: none;
+            width: 380px;
+            height: 600px;
+            background: var(--discussion--couleur-fond);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(133, 79, 255, 0.15);
+            border: 1px solid rgba(133, 79, 255, 0.2);
+            overflow: hidden;
+            font-family: inherit;
+        }
+
+        .n8n-widget-discussion .conteneur-discussion.position-gauche {
+            right: auto;
+            left: 20px;
+        }
+
+        .n8n-widget-discussion .conteneur-discussion.ouvert {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .n8n-widget-discussion .entete-marque {
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(133, 79, 255, 0.1);
+            position: relative;
+        }
+        
+        /* Conteneur des boutons de contrôle de l'entête */
+        .n8n-widget-discussion .controles-entete {
+            display: flex;
+            align-items: center;
+            margin-left: auto;
+        }
+
+        /* Bouton pour démarrer une nouvelle discussion */
+        .n8n-widget-discussion .btn-nouvelle-discussion-icone {
+            background: none;
+            border: none;
+            color: var(--discussion--couleur-police);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+            font-size: 20px;
+            opacity: 0.6;
+            line-height: 1;
+        }
+        
+        .n8n-widget-discussion .btn-nouvelle-discussion-icone:hover {
+            opacity: 1;
+        }
+        
+        .n8n-widget-discussion .btn-nouvelle-discussion-icone svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .n8n-widget-discussion .bouton-fermer {
+            background: none;
+            border: none;
+            color: var(--discussion--couleur-police);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            font-size: 20px;
+            opacity: 0.6;
+        }
+
+        .n8n-widget-discussion .bouton-fermer:hover {
+            opacity: 1;
+        }
+
+        .n8n-widget-discussion .entete-marque img {
+            width: 32px;
+            height: 32px;
+        }
+
+        .n8n-widget-discussion .entete-marque span {
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--discussion--couleur-police);
+        }
+
+        .n8n-widget-discussion .nouvelle-conversation {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            text-align: center;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .n8n-widget-discussion .texte-bienvenue {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--discussion--couleur-police);
+            margin-bottom: 24px;
+            line-height: 1.3;
+        }
+
+        .n8n-widget-discussion .btn-nouvelle-discussion {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, var(--discussion--couleur-primaire) 0%, var(--discussion--couleur-secondaire) 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.3s;
+            font-weight: 500;
+            font-family: inherit;
+            margin-bottom: 12px;
+        }
+
+        .n8n-widget-discussion .btn-nouvelle-discussion:hover {
+            transform: scale(1.02);
+        }
+
+        .n8n-widget-discussion .icone-message {
+            width: 20px;
+            height: 20px;
+        }
+
+        .n8n-widget-discussion .texte-reponse {
+            font-size: 14px;
+            color: var(--discussion--couleur-police);
+            opacity: 0.7;
+            margin: 0;
+        }
+
+        .n8n-widget-discussion .interface-discussion {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .n8n-widget-discussion .interface-discussion.active {
+            display: flex;
+        }
+
+        .n8n-widget-discussion .messages-discussion {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: var(--discussion--couleur-fond);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .n8n-widget-discussion .message-bulle {
+            padding: 12px 16px;
+            margin: 8px 0;
+            border-radius: 12px;
+            max-width: 80%;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .n8n-widget-discussion .message-bulle.utilisateur {
+            background: linear-gradient(135deg, var(--discussion--couleur-primaire) 0%, var(--discussion--couleur-secondaire) 100%);
+            color: white;
+            align-self: flex-end;
+            box-shadow: 0 4px 12px rgba(133, 79, 255, 0.2);
+            border: none;
+        }
+
+        .n8n-widget-discussion .message-bulle.bot {
+            background: var(--discussion--couleur-fond);
+            border: 1px solid rgba(133, 79, 255, 0.2);
+            color: var(--discussion--couleur-police);
+            align-self: flex-start;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Style pour les messages d'erreur */
+        .n8n-widget-discussion .message-bulle.erreur {
+            background: #ffcccc;
+            border: 1px solid #ff9999;
+            color: #cc0000;
+            align-self: flex-start;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .n8n-widget-discussion .saisie-discussion {
+            padding: 16px;
+            background: var(--discussion--couleur-fond);
+            border-top: 1px solid rgba(133, 79, 255, 0.1);
+            display: flex;
+            gap: 8px;
+        }
+
+        .n8n-widget-discussion .saisie-discussion textarea {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid rgba(133, 79, 255, 0.2);
+            border-radius: 8px;
+            background: var(--discussion--couleur-fond);
+            color: var(--discussion--couleur-police);
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            min-height: 44px;
+            box-sizing: border-box;
+        }
+
+        .n8n-widget-discussion .saisie-discussion textarea::placeholder {
+            color: var(--discussion--couleur-police);
+            opacity: 0.6;
+        }
+
+        .n8n-widget-discussion .saisie-discussion button {
+            background: linear-gradient(135deg, var(--discussion--couleur-primaire) 0%, var(--discussion--couleur-secondaire) 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 20px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            font-family: inherit;
+            font-weight: 500;
+            flex-shrink: 0;
+            height: 44px;
+        }
+
+        .n8n-widget-discussion .saisie-discussion button:hover {
+            transform: scale(1.05);
+        }
+
+        .n8n-widget-discussion .bouton-bascule-discussion {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            background: linear-gradient(135deg, var(--discussion--couleur-primaire) 0%, var(--discussion--couleur-secondaire) 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(133, 79, 255, 0.3);
+            z-index: 999;
+            transition: transform 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .n8n-widget-discussion .bouton-bascule-discussion.position-gauche {
+            right: auto;
+            left: 20px;
+        }
+
+        .n8n-widget-discussion .bouton-bascule-discussion:hover {
+            transform: scale(1.05);
+        }
+
+        .n8n-widget-discussion .bouton-bascule-discussion svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        .n8n-widget-discussion .pied-discussion {
+            padding: 8px;
+            text-align: center;
+            background: var(--discussion--couleur-fond);
+            border-top: 1px solid rgba(133, 79, 255, 0.1);
+        }
+
+        .n8n-widget-discussion .pied-discussion a {
+            color: var(--discussion--couleur-primaire);
+            text-decoration: none;
+            font-size: 12px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            font-family: inherit;
+        }
+
+        .n8n-widget-discussion .pied-discussion a:hover {
+            opacity: 1;
+        }
+    `;
+
+    // Charger la police Geist
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css';
+    document.head.appendChild(fontLink);
+
+    // Injecter les styles
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+
+    // ----------------------------------------------------------------------
+    // 2. CONFIGURATION ET MERGE
+    // ----------------------------------------------------------------------
+
+    // Configuration par défaut (traduction des textes)
+    const defaultConfig = {
+        webhook: {
+            url: '',
+            route: ''
+        },
+        branding: {
+            logo: '',
+            name: 'Assistant IA',
+            welcomeText: 'Bonjour ! Comment puis-je vous aider ?',
+            responseTimeText: 'Réponse typique en quelques minutes.',
+            poweredBy: {
+                text: 'Propulsé par n8n',
+                link: 'https://n8n.partnerlinks.io/m8a94i19zhqq?utm_source=nocodecreative.io'
+            }
+        },
+        style: {
+            primaryColor: '',
+            secondaryColor: '',
+            position: 'right', // 'right' ou 'left'
+            backgroundColor: '#ffffff',
+            fontColor: '#333333'
+        },
+        userId: '' 
+    };
+
+    // Fusionner la configuration utilisateur (window.ChatWidgetConfig) avec les valeurs par défaut
+    const userConfig = window.ChatWidgetConfig || {};
+    const config = {
+        webhook: { ...defaultConfig.webhook, ...userConfig.webhook },
+        branding: { ...defaultConfig.branding, ...userConfig.branding },
+        style: { ...defaultConfig.style, ...userConfig.style },
+        userId: userConfig.userId || defaultConfig.userId
+    };
+
+    // Empêcher les initialisations multiples
+    if (window.N8NChatWidgetInitialized) return;
+    window.N8NChatWidgetInitialized = true;
+
+    let currentSessionId = '';
+
+    // ----------------------------------------------------------------------
+    // 3. CRÉATION DU WIDGET DANS LE DOM
+    // ----------------------------------------------------------------------
+
+    // Créer le conteneur du widget (classe changée pour le français)
+    const widgetContainer = document.createElement('div');
+    widgetContainer.className = 'n8n-widget-discussion';
+
+    // Définir les variables CSS pour les couleurs (en français)
+    widgetContainer.style.setProperty('--n8n-discussion-couleur-primaire', config.style.primaryColor);
+    widgetContainer.style.setProperty('--n8n-discussion-couleur-secondaire', config.style.secondaryColor);
+    widgetContainer.style.setProperty('--n8n-discussion-couleur-fond', config.style.backgroundColor);
+    widgetContainer.style.setProperty('--n8n-discussion-couleur-police', config.style.fontColor);
+
+    // Conteneur principal (classe changée pour le français)
+    const chatContainer = document.createElement('div');
+    chatContainer.className = `conteneur-discussion${config.style.position === 'left' ? ' position-gauche' : ''}`;
+
+    // HTML de l'écran de nouvelle conversation (en français)
+    const newConversationHTML = `
+        <div class="entete-marque">
+            <img src="${config.branding.logo}" alt="${config.branding.name}">
+            <span>${config.branding.name}</span>
+            <div class="controles-entete">
+                <button class="bouton-fermer" title="Fermer">×</button>
+            </div>
+        </div>
+        <div class="nouvelle-conversation">
+            <h2 class="texte-bienvenue">${config.branding.welcomeText}</h2>
+            <button class="btn-nouvelle-discussion" title="Commencer la discussion">
+                <svg class="icone-message" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.2L4 17.2V4h16v12z"/>
+                </svg>
+                Commencer la discussion
+            </button>
+            <p class="texte-reponse">${config.branding.responseTimeText}</p>
+        </div>
+    `;
+
+    // HTML de l'interface de discussion (en français)
+    const chatInterfaceHTML = `
+        <div class="interface-discussion">
+            <div class="entete-marque">
+                <img src="${config.branding.logo}" alt="${config.branding.name}">
+                <span>${config.branding.name}</span>
+                <div class="controles-entete">
+                    <button class="btn-nouvelle-discussion-icone" title="Nouvelle discussion">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.2L4 17.2V4h16v12zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
+                    </button>
+                    <button class="bouton-fermer" title="Fermer">×</button>
+                </div>
+            </div>
+            <div class="messages-discussion"></div>
+            <div class="saisie-discussion">
+                <textarea placeholder="Tapez votre message ici..." rows="1"></textarea>
+                <button type="submit" title="Envoyer">Envoyer</button>
+            </div>
+            <div class="pied-discussion">
+                <a href="${config.branding.poweredBy.link}" target="_blank">${config.branding.poweredBy.text}</a>
+            </div>
+        </div>
+    `;
+
+    chatContainer.innerHTML = newConversationHTML + chatInterfaceHTML;
+
+    // Bouton de bascule
+    const toggleButton = document.createElement('button');
+    toggleButton.className = `bouton-bascule-discussion${config.style.position === 'left' ? ' position-gauche' : ''}`;
+    toggleButton.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 1.821.487 3.53 1.338 5L2.5 21.5l4.5-.838A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.476 0-2.886-.313-4.156-.878l-3.156.586.586-3.156A7.962 7.962 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
+        </svg>`;
+
+    widgetContainer.appendChild(chatContainer);
+    widgetContainer.appendChild(toggleButton);
+    document.body.appendChild(widgetContainer);
+
+    // ----------------------------------------------------------------------
+    // 4. RÉFÉRENCES ET FONCTIONS DE LOGIQUE
+    // ----------------------------------------------------------------------
+
+    const newConversationScreen = chatContainer.querySelector('.nouvelle-conversation');
+    const newChatBtn = chatContainer.querySelector('.btn-nouvelle-discussion');
+    const chatInterface = chatContainer.querySelector('.interface-discussion');
+    const messagesContainer = chatContainer.querySelector('.messages-discussion');
+    const textarea = chatContainer.querySelector('textarea');
+    const sendButton = chatContainer.querySelector('button[type="submit"]');
+    const newChatIconButton = chatContainer.querySelector('.btn-nouvelle-discussion-icone');
+
+
+    function generateUUID() {
+        return crypto.randomUUID();
+    }
+    
+    /** Ajoute un message (bulle) à la discussion */
+    function addMessage(content, type) {
+        const messageDiv = document.createElement('div');
+        // Les classes de message (utilisateur, bot, erreur) sont conservées en français
+        const messageTypeClass = (type === 'user') ? 'utilisateur' : (type === 'bot' ? 'bot' : 'erreur');
+        messageDiv.className = `message-bulle ${messageTypeClass}`;
+        messageDiv.textContent = content;
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    /** Réinitialise l'interface et revient à l'écran de bienvenue */
+    function resetChatInterface() {
+        messagesContainer.innerHTML = '';
+        currentSessionId = '';
+        chatInterface.classList.remove('active');
+        newConversationScreen.style.display = 'block';
+        adjustTextareaHeight();
+    }
+    
+    /** Ajuste dynamiquement la hauteur de la zone de texte */
+    function adjustTextareaHeight() {
+        textarea.style.height = 'auto';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+        // Limiter à 5 lignes
+        const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
+        const maxHeight = lineHeight * 5 + parseFloat(getComputedStyle(textarea).paddingTop) + parseFloat(getComputedStyle(textarea).paddingBottom);
+        if (textarea.scrollHeight > maxHeight) {
+             textarea.style.height = maxHeight + 'px';
+             textarea.style.overflowY = 'scroll';
+        } else {
+             textarea.style.overflowY = 'hidden';
+        }
+    }
+
+
+    /** Démarre une nouvelle conversation avec le webhook */
+    async function startNewConversation() {
+        currentSessionId = generateUUID();
+        
+        // Afficher l'interface de discussion immédiatement
+        newConversationScreen.style.display = 'none';
+        chatInterface.classList.add('active');
+        messagesContainer.innerHTML = ''; // Nettoyer
+
+        const data = [{
+            action: "loadPreviousSession",
+            sessionId: currentSessionId,
+            route: config.webhook.route,
+            metadata: {
+                userId: config.userId
+            }
+        }];
+
+        try {
+            const response = await fetch(config.webhook.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                 throw new Error(`Erreur HTTP! Statut: ${response.status}`);
+            }
+
+            const responseData = await response.json();
+            
+            const botResponseText = Array.isArray(responseData) && responseData.length > 0 ? responseData[0].output : (responseData.output || 'Bonjour ! Je suis prêt à vous aider.');
+            addMessage(botResponseText, 'bot');
+
+        } catch (error) {
+            console.error('Erreur au démarrage de la conversation:', error);
+            addMessage(`Erreur: Impossible de démarrer la conversation ou de récupérer le message de bienvenue. Vérifiez la configuration.`, 'erreur');
+        }
+    }
+
+    /** Envoie un message au webhook */
+    async function sendMessage(message) {
+        if (!currentSessionId) {
+            await startNewConversation();
+        }
+
+        const messageData = {
+            action: "sendMessage",
+            sessionId: currentSessionId,
+            route: config.webhook.route,
+            chatInput: message,
+            metadata: {
+                userId: config.userId
+            }
+        };
+
+        addMessage(message, 'user');
+        
+        try {
+            const response = await fetch(config.webhook.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(messageData)
+            });
+
+            if (!response.ok) {
+                 throw new Error(`Erreur HTTP! Statut: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            const botResponseText = Array.isArray(data) && data.length > 0 ? data[0].output : (data.output || 'Désolé, je n\'ai pas reçu de réponse.');
+            addMessage(botResponseText, 'bot');
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'envoi du message:', error);
+            addMessage('Erreur: L\'envoi du message a échoué. Veuillez vérifier la connexion.', 'erreur');
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // 5. GESTION DES ÉVÉNEMENTS
+    // ----------------------------------------------------------------------
+
+    newChatBtn.addEventListener('click', startNewConversation);
+    newChatIconButton.addEventListener('click', resetChatInterface);
+
+    sendButton.addEventListener('click', () => {
+        const message = textarea.value.trim();
+        if (message) {
+            sendMessage(message);
+            textarea.value = '';
+            adjustTextareaHeight();
+        }
+    });
+
+    textarea.addEventListener('input', adjustTextareaHeight);
+
+    textarea.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const message = textarea.value.trim();
+            if (message) {
+                sendMessage(message);
+                textarea.value = '';
+                adjustTextareaHeight();
+            }
+        }
+    });
+
+    toggleButton.addEventListener('click', () => {
+        chatContainer.classList.toggle('ouvert');
+        if (chatContainer.classList.contains('ouvert') && chatInterface.classList.contains('active')) {
+            textarea.focus();
+        }
+    });
+
+    // Gestionnaires des boutons de fermeture
+    const closeButtons = chatContainer.querySelectorAll('.bouton-fermer');
+    closeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            chatContainer.classList.remove('ouvert');
+        });
+    });
+    
+    // Initialisation
+    if (chatInterface.classList.contains('active')) {
+         chatInterface.classList.remove('active');
+    }
+    adjustTextareaHeight(); 
+})();
